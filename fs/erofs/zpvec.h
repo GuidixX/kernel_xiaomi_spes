@@ -121,11 +121,22 @@ z_erofs_pagevec_ctor_enqueue(struct z_erofs_pagevec_ctor *ctor,
 ========
 static inline bool z_erofs_pagevec_enqueue(struct z_erofs_pagevec_ctor *ctor,
 					   struct page *page,
-					   enum z_erofs_page_type type)
+					   enum z_erofs_page_type type,
+					   bool pvec_safereuse)
 {
+<<<<<<< HEAD
 	if (!ctor->next && type)
 		if (ctor->index + 1 == ctor->nr)
 >>>>>>>> 343c91c701fd (erofs: sync up with kernel 5.10):drivers/staging/erofs/zpvec.h
+=======
+	if (!ctor->next) {
+		/* some pages cannot be reused as pvec safely without I/O */
+		if (type == Z_EROFS_PAGE_TYPE_EXCLUSIVE && !pvec_safereuse)
+			type = Z_EROFS_VLE_PAGE_TYPE_TAIL_SHARED;
+
+		if (type != Z_EROFS_PAGE_TYPE_EXCLUSIVE &&
+		    ctor->index + 1 == ctor->nr)
+>>>>>>> 134263e3af95 (erofs: fix unsafe pagevec reuse of hooked pclusters)
 			return false;
 	}
 
