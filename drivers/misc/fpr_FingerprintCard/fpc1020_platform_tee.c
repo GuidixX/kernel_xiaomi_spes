@@ -443,8 +443,7 @@ static irqreturn_t fpc1020_irq_handler(int irq, void *handle)
 	mutex_lock(&fpc1020->lock);
 	if (atomic_read(&fpc1020->wakeup_enabled)) {
 		fpc1020->nbr_irqs_received++;
-		__pm_wakeup_event(fpc1020->ttw_wl,
-					msecs_to_jiffies(FPC_TTW_HOLD_TIME));
+		__pm_wakeup_event(fpc1020->ttw_wl, FPC_TTW_HOLD_TIME);
 	}
 	mutex_unlock(&fpc1020->lock);
 
@@ -524,7 +523,7 @@ static int fpc1020_probe(struct platform_device *pdev)
 	select_pin_ctl(fpc1020, "fpc1020_reset_reset");
 	select_pin_ctl(fpc1020, "fpc1020_irq_active");
 
-	atomic_set(&fpc1020->wakeup_enabled, 0);
+	atomic_set(&fpc1020->wakeup_enabled, 1);
 
 	if (of_property_read_bool(dev->of_node, "fpc,enable-wakeup")) {
 		irqf = IRQF_NO_SUSPEND;
