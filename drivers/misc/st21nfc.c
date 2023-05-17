@@ -40,7 +40,7 @@
 #endif
 #include <linux/of_irq.h>
 #include "st21nfc.h"
-#include <board_id.h>
+#include "board_id.h"
 
 #define MAX_BUFFER_SIZE 260
 #define HEADER_LENGTH 3
