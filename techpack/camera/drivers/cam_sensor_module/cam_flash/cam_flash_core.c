@@ -10,7 +10,6 @@
 #include "cam_res_mgr_api.h"
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
-#include "oplus_cam_flash_aw3641e.h"
 
 static int cam_flash_prepare(struct cam_flash_ctrl *flash_ctrl,
 	bool regulator_enable)
@@ -529,11 +528,6 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 		}
 		flash_ctrl->flash_state = CAM_FLASH_STATE_CONFIG;
 	}
-
-#ifdef CONFIG_CAMERA_FLASH_PWM
-    if (flash_ctrl->flash_type == 2)
-        cam_flash_gpio_off(flash_ctrl);
-#endif
 
 	return 0;
 }

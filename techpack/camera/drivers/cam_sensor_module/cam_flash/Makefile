@@ -11,9 +11,5 @@ ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_sensor_i
 ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_sensor_module/cam_sensor_utils
 ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_smmu
 ccflags-y += -I$(srctree)/techpack/camera/drivers/cam_utils
-#ifdef OPLUS_FEATURE_CAMERA_COMMON
-#fujiahao@camera 2021-9-10 add for jieou kernel
-ccflags-y += -I$(srctree)/techpack/camera/oplus/drivers/cam_sensor_module/cam_flash
-#endif
 
 obj-$(CONFIG_SPECTRA_CAMERA) += cam_flash_dev.o cam_flash_core.o cam_flash_soc.o
