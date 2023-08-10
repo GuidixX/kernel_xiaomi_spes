@@ -5308,7 +5308,7 @@ int dsi_panel_read_cmd_set(struct dsi_panel *panel,
 	cmds->msg.rx_buf = read_config->rbuf;
 	cmds->msg.rx_len = read_config->cmds_rlen;
 
-	rc = dsi_ctrl_cmd_transfer(ctrl->ctrl, &(cmds->msg), flags);
+	rc = dsi_ctrl_cmd_transfer(ctrl->ctrl, &(cmds->msg), &flags);
 	if (rc <= 0) {
 		pr_err("rx cmd transfer failed rc=%d\n", rc);
 		goto exit;

@@ -639,97 +639,6 @@ static void dsi_display_parse_te_data(struct dsi_display *display)
 	display->te_source = val;
 }
 
-static char dcs_cmd[2] = {0x00, 0x00}; /* DTYPE_DCS_READ */
-static struct dsi_cmd_desc dcs_read_cmd = {
-       {0, 6, MIPI_DSI_MSG_REQ_ACK, 0, 5, sizeof(dcs_cmd), dcs_cmd, 0, 0},
-       1,
-       5,
-};
-
-
-static int dsi_display_read_reg(struct dsi_display_ctrl *ctrl, char cmd0,
-		char cmd1, char *rbuf, int len)
-{
-	int rc = 0;
-	struct dsi_cmd_desc *cmds;
-	u32 flags = 0;
-
-	if (!ctrl || !ctrl->ctrl)
-		return -EINVAL;
-
-	/*
-	 * When DSI controller is not in initialized state, we do not want to
-	 * report a false failure and hence we defer until next read
-	 * happen.
-	 */
-	if (!dsi_ctrl_validate_host_state(ctrl->ctrl))
-		return 1;
-
-	dcs_cmd[0] = cmd0;
-	dcs_cmd[1] = cmd1;
-
-	cmds = &dcs_read_cmd;
-	flags |= (DSI_CTRL_CMD_FETCH_MEMORY | DSI_CTRL_CMD_READ );
-
-	memset(rbuf, 0x0, SZ_4K);
-	if (cmds->last_command) {
-		cmds->msg.flags |= MIPI_DSI_MSG_LASTCOMMAND;
-		flags |= DSI_CTRL_CMD_LAST_COMMAND;
-	}
-	cmds->msg.rx_buf = rbuf;
-	cmds->msg.rx_len = len;
-	rc = dsi_ctrl_cmd_transfer(ctrl->ctrl, &cmds->msg, flags);
-	if (rc <= 0) {
-		pr_err("rx cmd transfer failed rc=%d\n", rc);
-		return rc;
-	}
-	pr_debug("xinj: rbuf[0]= %x,rbuf[1]= %x, rbuf[2] = %x, rbuf[3] =%x,rbuf[4]=%x,rbuf[5]=%x,rbuf[6]=%x,rbuf[7]=%x\n",
-			rbuf[0] ,rbuf[1], rbuf[2],rbuf[3], rbuf[4],rbuf[5],rbuf[6],rbuf[7]);
-
-	return rc;
- }
-
-static char dcs_cmd_page[2] = {0x00, 0x00}; /* DTYPE_DCS_READ */
-static struct dsi_cmd_desc dcs_read_cmd_page = {
-       {0, 0x15, MIPI_DSI_MSG_REQ_ACK, 0, 5, sizeof(dcs_cmd_page), dcs_cmd_page, 0, 0},
-       1,
-       5,
-};
-
-static int dsi_display_write_reg_page(struct dsi_display_ctrl *ctrl, char cmd0,
-		char cmd1, char *rbuf, int len)
-{
-	int rc = 0;
-	struct dsi_cmd_desc *cmds;
-	u32 flags = 0;
-
-	if (!ctrl || !ctrl->ctrl)
-		return -EINVAL;
-
-	if (!dsi_ctrl_validate_host_state(ctrl->ctrl))
-		return 1;
-
-	dcs_cmd_page[0] = cmd0;
-	dcs_cmd_page[1] = cmd1;
-	cmds = &dcs_read_cmd_page;
-	flags |= (DSI_CTRL_CMD_FETCH_MEMORY);
-
-	memset(rbuf, 0x0, SZ_4K);
-	if (cmds->last_command) {
-		cmds->msg.flags |= MIPI_DSI_MSG_LASTCOMMAND;
-		flags |= DSI_CTRL_CMD_LAST_COMMAND;
-	}
-	cmds->msg.rx_buf = NULL;
-	cmds->msg.rx_len = 0;
-	rc = dsi_ctrl_cmd_transfer(ctrl->ctrl, &cmds->msg, flags);
-	if (rc < 0) {
-		pr_debug("rx cmd transfer failed rc=%d\n", rc);
-		return rc;
-	}
-
-	return rc;
- }
-
 static int dsi_display_read_status(struct dsi_display_ctrl *ctrl,
 		struct dsi_panel *panel)
 {
@@ -1033,7 +942,7 @@ int dsi_display_read_panel(struct dsi_panel *panel, struct dsi_read_config *read
 	cmds->msg.rx_buf = read_config->rbuf;
 	cmds->msg.rx_len = read_config->cmds_rlen;
 
-	rc = dsi_ctrl_cmd_transfer(ctrl->ctrl, &(cmds->msg), flags);
+	rc = dsi_ctrl_cmd_transfer(ctrl->ctrl, &(cmds->msg), &flags);
 	if (rc <= 0) {
 		pr_err("rx cmd transfer failed rc=%d\n", rc);
 		goto exit;
@@ -5224,11 +5133,6 @@ static ssize_t dsi_display_get_whitepoint(struct device *dev,
 
 	ctrl = &display->ctrl[display->cmd_master_idx];
 
-	#ifdef CONFIG_XIMI_MOJITO
-		rc = dsi_display_write_reg_page(ctrl, 0xFF, 0x10, buf, sizeof(buf));
-		rc = dsi_display_read_reg(ctrl, 0xA1, 0x00, buf, sizeof(buf));
-	#endif
-
 	if (rc <= 0) {
 		pr_err("get whitepoint failed rc=%d\n", rc);
 		goto exit;
@@ -5338,11 +5242,6 @@ int lct_tp_lockdown_info_callback(void)
 	}
 
 	ctrl = &display->ctrl[display->cmd_master_idx];
-
-	#ifdef CONFIG_XIMI_MOJITO
-		rc = dsi_display_write_reg_page(ctrl, 0xFF, 0x21, buf, sizeof(buf));
-		rc = dsi_display_read_reg(ctrl, 0xF1, 0x00, buf, sizeof(buf));
-	#endif
 
 	if (rc < 0) {
 		pr_err("get lockdown  failed rc=%d\n", rc);
