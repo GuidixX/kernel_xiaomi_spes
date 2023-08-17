@@ -1893,6 +1893,8 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-hbm-off-command",
 	"qcom,mdss-dsi-hbm1-on-command",
 	"qcom,mdss-dsi-hbm2-on-command",
+	"qcom,mdss-dsi-dispparam-bc-90hz-command",
+	"qcom,mdss-dsi-dispparam-bc-60hz-command",
 #endif
 };
 
@@ -1927,6 +1929,8 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-hbm-off-command-state",
 	"qcom,mdss-dsi-hbm1-on-command-state",
 	"qcom,mdss-dsi-hbm2-on-command-state",
+	"qcom,mdss-dsi-dispparam-bc-90hz-command-state",
+	"qcom,mdss-dsi-dispparam-bc-60hz-command-state",
 #endif
 };
 
@@ -4726,6 +4730,41 @@ int dsi_panel_post_unprepare(struct dsi_panel *panel)
 error:
 	mutex_unlock(&panel->panel_lock);
 	return rc;
+}
+
+void dsi_set_backlight_control(struct dsi_panel *panel,
+			 struct dsi_display_mode *adj_mode)
+{
+	int rc = 0;
+
+	if (!panel || !adj_mode) {
+		pr_err("Invalid params\n");
+		return;
+	}
+
+	mutex_lock(&panel->panel_lock);
+	if (adj_mode->timing.refresh_rate == 90) {
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_BC_90HZ);
+		if (rc)
+			pr_err("[%s][%s] failed to send DSI_CMD_SET_DISP_BC_90HZ cmd, rc=%d\n",
+					__func__, panel->name, rc);
+		else {
+			panel->dsi_refresh_flag = 90;
+			DSI_INFO("%s: refresh_rate = %d\n", __func__, adj_mode->timing.refresh_rate);
+		}
+	} else if (adj_mode->timing.refresh_rate == 60) {
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_BC_60HZ);
+		if (rc)
+			DSI_ERR("[%s][%s] failed to send DSI_CMD_SET_DISP_BC_60HZ cmd, rc=%d\n",
+					__func__, panel->name, rc);
+		else {
+			panel->dsi_refresh_flag = 60;
+			DSI_INFO("%s: refresh_rate = %d\n", __func__, adj_mode->timing.refresh_rate);
+		}
+	}
+	mutex_unlock(&panel->panel_lock);
+
+	return;
 }
 
 int dsi_panel_apply_hbm_mode(struct dsi_panel *panel)
