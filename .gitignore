@@ -137,3 +137,10 @@ kernel/configs/android-*.cfg
 
 # vendor device tree directories
 arch/arm64/boot/dts/vendor/
+
+# Ignore shell scripts on root dir
+/*.sh
+/KernelSU
+/tc
+/out
+/*.txt
