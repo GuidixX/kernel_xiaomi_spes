@@ -4,10 +4,23 @@
  */
 
 #include <linux/module.h>
+#include <linux/leds.h>
+#include <linux/platform_device.h>
+#include <linux/of.h>
+#include <linux/gpio.h>
+#include <linux/sysfs.h>
+#include <linux/fs.h>
+#include <linux/uaccess.h>
+#include <linux/kobject.h>
+#include <linux/of_gpio.h>
+#include <linux/pinctrl/consumer.h>
 #include "cam_flash_dev.h"
 #include "cam_flash_soc.h"
 #include "cam_flash_core.h"
 #include "cam_common_util.h"
+
+static int flashlight_probe(struct platform_device *pdev);
+static int flashlight_level = 0;
 
 /* Spes flashlight by muralivijay@github */
 #ifdef CONFIG_CAMERA_FLASH_SPES
@@ -540,28 +553,6 @@ static int32_t cam_flash_platform_probe(struct platform_device *pdev)
 		fctrl->func_tbl.flush_req = cam_flash_pmic_flush_request;
 	}
 
-/* Spes flashlight by muralivijay@github */
-#ifdef CONFIG_CAMERA_FLASH_SPES
-                // Get flash_en GPIO
-                /*Xiaomi added tlmm 85 pin in dts used as flash mode in camera */
-                mgpio_flash_led.flash_en = of_get_named_gpio(gnode, "qcom,flash-gpios", 0);
-                if (!gpio_is_valid(mgpio_flash_led.flash_en)) {
-                // Handle error if GPIO is not valid
-                CAM_ERR(CAM_FLASH, "Invalid GPIO for flash_en");
-               }
-                CAM_INFO(CAM_FLASH, "flash_en GPIO: %d", mgpio_flash_led.flash_en);
-
-                // Get flash_now GPIO
-                /*Xiaomi added pm6125_gpios 2 pin in dts  mainly used as torch mode */
-                mgpio_flash_led.flash_now = of_get_named_gpio(gnode, "qcom,flash-gpios", 1);
-                if (!gpio_is_valid(mgpio_flash_led.flash_now)) {
-                // Handle error if GPIO is not valid
-                CAM_ERR(CAM_FLASH, "Invalid GPIO for flash_en");
-               }
-                CAM_INFO(CAM_FLASH, "flash_now GPIO: %d", mgpio_flash_led.flash_now);
-#endif
-/* Spes flashlight by muralivijay@github */
-
 	rc = cam_flash_init_subdev(fctrl);
 	if (rc) {
 		if (fctrl->io_master_info.cci_client != NULL)
@@ -582,6 +573,15 @@ static int32_t cam_flash_platform_probe(struct platform_device *pdev)
 
 	fctrl->flash_state = CAM_FLASH_STATE_INIT;
 	CAM_DBG(CAM_FLASH, "Probe success");
+	#ifdef CONFIG_CAMERA_FLASH_SPES
+	// Call flashlight_probe function
+	rc = flashlight_probe(pdev);
+	if (rc) {
+		CAM_ERR(CAM_FLASH, "flashlight_probe failed with %d", rc);
+		goto free_cci_resource;
+	}
+	#endif
+
 	return rc;
 
 free_cci_resource:
@@ -596,6 +596,102 @@ free_resource:
 	kfree(fctrl);
 	fctrl = NULL;
 	return rc;
+}
+
+static struct led_classdev flashlight_led;
+
+static void update_flashlight_state(int value)
+{
+    if (value == 0) {
+        gpio_set_value(mgpio_flash_led.flash_en, 0);
+        gpio_set_value(mgpio_flash_led.flash_now, 0);
+    } else if (value < 50) {
+        gpio_set_value(mgpio_flash_led.flash_en, 1);
+        gpio_set_value(mgpio_flash_led.flash_now, 0);
+    } else {
+        gpio_set_value(mgpio_flash_led.flash_en, 0);
+        gpio_set_value(mgpio_flash_led.flash_now, 1);
+    }
+}
+
+static ssize_t brightness_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", flashlight_level);
+}
+
+static ssize_t brightness_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+    int ret;
+    unsigned long value;
+
+    ret = kstrtoul(buf, 10, &value);
+    if (ret)
+        return ret;
+
+    if (value > 100)
+        value = 100;
+
+    flashlight_level = value;
+    update_flashlight_state(value);
+
+    return count;
+}
+
+static DEVICE_ATTR_RW(brightness);
+
+static void flashlight_brightness_set(struct led_classdev *led_cdev, enum led_brightness brightness)
+{
+    flashlight_level = brightness;
+    update_flashlight_state(brightness);
+}
+
+static enum led_brightness flashlight_brightness_get(struct led_classdev *led_cdev)
+{
+    return flashlight_level > 0 ? LED_FULL : LED_OFF;
+}
+
+static int flashlight_probe(struct platform_device *pdev)
+{
+    int ret;
+    struct device_node *gnode = pdev->dev.of_node;
+
+    mgpio_flash_led.flash_en = of_get_named_gpio(gnode, "qcom,flash-gpios", 0);
+    if (!gpio_is_valid(mgpio_flash_led.flash_en)) {
+        dev_err(&pdev->dev, "Invalid GPIO for flash_en\n");
+        return -ENODEV;
+    }
+
+    mgpio_flash_led.flash_now = of_get_named_gpio(gnode, "qcom,flash-gpios", 1);
+    if (!gpio_is_valid(mgpio_flash_led.flash_now)) {
+        dev_err(&pdev->dev, "Invalid GPIO for flash_now\n");
+        return -ENODEV;
+    }
+
+    ret = device_create_file(&pdev->dev, &dev_attr_brightness);
+    if (ret) {
+        dev_err(&pdev->dev, "Failed to create sysfs entry\n");
+        return ret;
+    }
+
+    flashlight_led.name = "led:torch";
+    flashlight_led.brightness_set = flashlight_brightness_set;
+    flashlight_led.brightness_get = flashlight_brightness_get;
+
+    ret = led_classdev_register(&pdev->dev, &flashlight_led);
+    if (ret) {
+        device_remove_file(&pdev->dev, &dev_attr_brightness);
+        dev_err(&pdev->dev, "Failed to register LED class device\n");
+        return ret;
+    }
+
+    return 0;
+}
+
+static int flashlight_remove(struct platform_device *pdev)
+{
+    led_classdev_unregister(&flashlight_led);
+    device_remove_file(&pdev->dev, &dev_attr_brightness);
+    return 0;
 }
 
 static int32_t cam_flash_i2c_driver_probe(struct i2c_client *client,
@@ -712,6 +808,21 @@ free_ctrl:
 }
 
 MODULE_DEVICE_TABLE(of, cam_flash_dt_match);
+
+static const struct of_device_id flashlight_of_match[] = {
+	{ .compatible = "qcom,camera-flash" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, flashlight_of_match);
+
+static struct platform_driver flashlight_driver = {
+	.probe = flashlight_probe,
+	.remove = flashlight_remove,
+	.driver = {
+		.name = "flashlight",
+		.of_match_table = flashlight_of_match,
+	},
+};
 
 static struct platform_driver cam_flash_platform_driver = {
 	.probe = cam_flash_platform_probe,
