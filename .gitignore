@@ -144,3 +144,4 @@ arch/arm64/boot/dts/vendor/
 /tc
 /out
 /*.txt
+drivers/kernelsu
